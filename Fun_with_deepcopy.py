@@ -1,10 +1,12 @@
 import copy
 from enum import Enum
 
+
 class SkillLevel(Enum):
     BEGINNER = "beginner"
     INTERMEDIATE = "intermediate"
     ADVANCED = "advanced"
+
 
 class Hobby:
     def __init__(self, name, skill_level):
@@ -14,18 +16,26 @@ class Hobby:
     def __repr__(self):
         return f"Hobby(name={self.name!r}, skill_level={self.skill_level!r})"
 
+
 class Person:
     def __init__(self, name, hobbies, main_hobby=None):
         self.name = name
         self.hobbies = hobbies
         self.main_hobby = main_hobby
 
-
     def __repr__(self):
-        return f"Person(name={self.name!r}, hobbies={self.hobbies!r}, main_hobby={self.main_hobby!r})"
+        return (
+            f"Person(name={self.name!r}," +
+            f"hobbies={self.hobbies!r}, main_hobby={self.main_hobby!r})"
+        )
+
 
 # Create an instance
-original = Person("Alice", ["reading", "cycling"], main_hobby=Hobby("swimming", SkillLevel.INTERMEDIATE))
+original = Person(
+    "Alice",
+    ["reading", "cycling"],
+    main_hobby=Hobby("swimming", SkillLevel.INTERMEDIATE),
+)
 
 # Make a deepcopy
 cloned = copy.deepcopy(original)
