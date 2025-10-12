@@ -1,7 +1,7 @@
 from collections import deque
 from fighter import Fighter
 from spell import Spell, Spell_Type
-from typing import Tuple
+from match_state import MatchState
 import copy
 
 class Result:
@@ -104,83 +104,81 @@ class match_counter():
 mana_used = int
 
 # A function to cont two turn, counting from the player turn, from a given point.        
-def do_one_adok_kapok(
-        player_hit_points: int, 
-        player_mana: int, 
-        boss_hit_points: int, 
-        boss_damage: int, 
-        active_spells: list[Spell], 
-        next_spell: Spell, 
-        mana_used_so_far: int) -> Tuple[Result, int]:
+def do_one_adok_kapok(start_state: MatchState, next_spell: Spell) -> tuple[Result, MatchState]:
 
-    mana_used = 0
+    current_state = copy.copy(start_state)
+    current_state.previous_spells = [copy.copy(spell) for spell in start_state.previous_spells]
 
-    if any(spell.spell_type == next_spell.spell_type for spell in active_spells):
-        mana_used = 0
-        return Result.ERROR, mana_used
-    if next_spell.cost > player_mana:
-        mana_used = 0
-        return Result.ERROR, mana_used
-    
-    player_mana -= next_spell.cost
-    mana_used = mana_used_so_far + next_spell.cost
+    if any(spell.spell_type == next_spell.spell_type for spell in current_state.active_spells):
+        return Result.ERROR, current_state
+    if next_spell.cost > current_state.player_mana:
+        return Result.ERROR, current_state
+
+    current_state.player_mana -= next_spell.cost
+    current_state.previous_spells.append(next_spell)
 
     # deal with instant spells
     if next_spell.spell_type == Spell_Type.MAGIC_MISSILE:
-        if boss_hit_points <= next_spell.damage:            
-            return Result.PLAYER_WIN, mana_used        
-        boss_hit_points -= next_spell.damage        
+        if current_state.boss_hp <= next_spell.damage:
+            return Result.PLAYER_WIN, current_state
+        current_state.boss_hp -= next_spell.damage
 
     if next_spell.spell_type == Spell_Type.DRAIN:
-        if boss_hit_points <= next_spell.damage:
-            return Result.PLAYER_WIN, mana_used        
-        boss_hit_points -= next_spell.damage
-        player_hit_points += next_spell.heal
-    
+        if current_state.boss_hp <= next_spell.damage:
+            return Result.PLAYER_WIN, current_state
+        current_state.boss_hp -= next_spell.damage
+        current_state.player_hp += next_spell.heal
+
     if next_spell.spell_type in (Spell_Type.SHIELD, Spell_Type.POISON, Spell_Type.RECHARGE):
-        current_active_spells = [copy.copy(spell) for spell in active_spells]
-        current_active_spells.append(copy.copy(next_spell))
+        current_state.active_spells = [copy.copy(spell) for spell in current_state.active_spells]
+        current_state.active_spells.append(copy.copy(next_spell))
     else:
-        current_active_spells = [copy.copy(spell) for spell in active_spells]
+        current_state.active_spells = [copy.copy(spell) for spell in current_state.active_spells]
 
     player_armor = 0
     spells_to_remove = []
 
     # player turn
-    for spell in current_active_spells:
+    for spell in current_state.active_spells:
         spell.lasts -= 1
         if spell.spell_type == Spell_Type.SHIELD:
             player_armor = spell.armor_increase
         elif spell.spell_type == Spell_Type.POISON:
-            boss_hit_points -= spell.damage
+            current_state.boss_hp -= spell.damage
         elif spell.spell_type == Spell_Type.RECHARGE:
-            player_mana += spell.mana_increase
+            current_state.player_mana += spell.mana_increase
         if spell.lasts <= 0:
             spells_to_remove.append(spell)
 
     for spell in spells_to_remove:
-        current_active_spells.remove(spell)
+        current_state.active_spells.remove(spell)
+    
+    spells_to_remove = []
+
+    if current_state.boss_hp <= 0:
+        return Result.PLAYER_WIN, current_state
 
     #boss turn
-    player_hit_points -= max(1, boss_damage - player_armor)
+    current_state.player_hp -= max(1, current_state.boss_damage - player_armor)
 
-    if player_hit_points <= 0:
-        return Result.BOSS_WIN, mana_used
+    if current_state.player_hp <= 0:
+        return Result.BOSS_WIN,current_state
 
-    for spell in current_active_spells:
+    for spell in current_state.active_spells:
         spell.lasts -= 1
         if spell.spell_type == Spell_Type.SHIELD:
             player_armor = spell.armor_increase
         elif spell.spell_type == Spell_Type.POISON:
-            boss_hit_points -= spell.damage
+            current_state.boss_hp -= spell.damage
         elif spell.spell_type == Spell_Type.RECHARGE:
-            player_mana += spell.mana_increase
+            current_state.player_mana += spell.mana_increase
         if spell.lasts <= 0:
             spells_to_remove.append(spell)
 
     for spell in spells_to_remove:
-        current_active_spells.remove(spell)
+        current_state.active_spells.remove(spell)
 
-    player_armor = 0
+    if current_state.boss_hp <= 0:
+        return Result.PLAYER_WIN, current_state
 
-    return Result.ONGOING, mana_used
+    return Result.ONGOING, current_state
